@@ -154,8 +154,10 @@ tr:hover td{background:var(--bg4)}
 </div>
 <div class="pg" id="pg-port"><div class="ph"><h2>포트폴리오</h2><p>보유 자산 전체 현황</p></div><div id="portAll"></div>
 <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="openM('mH')">종목 추가</button><button class="btn bo" onclick="openM('mC')">현금/적금 추가</button><button class="btn bo" id="rfBtn" onclick="refreshAll()">시세 새로고침</button></div></div>
-<div class="pg" id="pg-perf"><div class="ph"><h2>수익률</h2><p>포트폴리오 성과 분석</p></div><div class="g3" id="pfS"></div>
-<div class="cd" style="margin-top:16px"><div class="ct">누적 수익률 vs 주요 지수</div><div class="chart-box" style="height:300px"><canvas id="pfC"></canvas></div></div>
+<div class="pg" id="pg-perf"><div class="ph"><h2>수익률</h2><p>포트폴리오 성과 및 자산 증감 분석</p></div>
+<div class="g3" id="pfS"></div>
+<div class="cd" style="margin-top:16px"><div class="ct">시장 수익률 (S&P 500 vs KOSPI 연초 대비)</div><div class="chart-box" style="height:250px"><canvas id="pfIdxC"></canvas></div></div>
+<div class="cd"><div class="ct">내 자산 변동 차트 (누적액 및 일/월별 평가 손익 변동)</div><div class="tabs"><div class="tab on" onclick="renderPerfChart('daily',this)">일별 보기</div><div class="tab" onclick="renderPerfChart('monthly',this)">월별 보기</div></div><div class="chart-box" style="height:320px"><canvas id="pfValC"></canvas></div></div>
 <div class="cd"><div class="ct">종목별 수익률</div><div id="pfT"></div></div></div>
 <div class="pg" id="pg-trade"><div class="ph"><h2>매수 · 매도</h2><p>거래 등록 → 포트폴리오 · 예수금 자동 반영</p></div>
 <div class="cd"><div class="ct">새 거래 등록</div>
@@ -214,6 +216,7 @@ function enter(){$('gate').classList.add('off');$('app').style.display='flex';in
 // DATA
 const DD={holdings:[],cash:[],trades:[],cashflows:[],fx:{USDKRW:0,JPYKRW:0,USDJPY:0},idx:{},pc:{},fxT:null,idxT:null};
 let D={...DD};
+let histCache={};
 async function save(){localStorage.setItem('pb_data',await enc(D))}
 function gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
 
@@ -358,6 +361,27 @@ async function delH(id){if(!confirm('삭제?'))return;D.holdings=D.holdings.filt
 async function delC(id){if(!confirm('삭제?'))return;D.cash=D.cash.filter(c=>c.id!==id);await save();rPort();rDash()}
 async function refreshAll(){$('rfBtn').textContent='조회 중...';$('rfBtn').disabled=true;await fetchAllPrices(true);$('rfBtn').textContent='시세 새로고침';$('rfBtn').disabled=false;rPort();rDash()}
 
+// ===== EDIT TICKER =====
+async function editTicker(id, oldTicker) {
+  const h = D.holdings.find(x => x.id === id);
+  if (!h) return;
+  const newTicker = prompt(`'${h.name}'의 Yahoo Finance 티커를 입력하세요.\n(예: 한국은 005930.KS, 미국은 AAPL)`, oldTicker || '');
+  if (newTicker === null || newTicker.trim() === '' || newTicker.trim().toUpperCase() === oldTicker) return;
+  h.ticker = newTicker.trim().toUpperCase();
+  await save();
+  rPort(); 
+  const d = await api('/api/quotes', { method: 'POST', body: JSON.stringify({ tickers: [{ name: h.name, ticker: h.ticker, market: h.market, currency: h.currency }] }) });
+  if (d && d.results && d.results[0] && d.results[0].price > 0) {
+    const res = d.results[0];
+    D.pc[pk(h)] = { price: res.price, currency: res.currency, ts: Date.now() };
+    await save();
+    rPort();
+    rDash();
+  } else {
+    alert('입력하신 티커로 시세를 가져오지 못했습니다. 티커가 정확한지 다시 확인해주세요.');
+  }
+}
+
 // ===== TRADE =====
 async function execTrade(){
   const type=$('tType').value,name=$('tName').value.trim(),market=$('tMkt').value,currency=curOf[market];
@@ -386,21 +410,165 @@ function rTrade(){const ct=$('tH');if(!D.trades.length){ct.innerHTML='<div class
 async function addCF(){const type=$('cfTp').value,amount=parseFloat($('cfAm').value),currency=$('cfCr').value,date=$('cfDt').value||new Date().toISOString().split('T')[0],memo=$('cfMe').value.trim();if(!amount)return alert('금액을 입력해주세요.');D.cashflows.push({id:gid(),type,amount,currency,date,memo});await save();rCash();['cfAm','cfMe'].forEach(id=>$(id).value='')}
 function rCash(){const ct=$('cfH');if(!D.cashflows.length){ct.innerHTML='<div class="empty">내역이 없습니다.</div>';return}const s=[...D.cashflows].sort((a,b)=>b.date.localeCompare(a.date));let h='<table><thead><tr><th>일자</th><th>유형</th><th>금액</th><th>통화</th><th>원화</th><th>메모</th></tr></thead><tbody>';for(const c of s)h+=`<tr><td class="mn">${c.date}</td><td>${c.type==='deposit'?'<span class="pos">입금</span>':'<span class="neg">출금</span>'}</td><td class="mn">${fN(c.amount,0)}</td><td>${c.currency}</td><td class="mn">${fK(toK(c.amount,c.currency))}</td><td>${c.memo||'—'}</td></tr>`;h+='</tbody></table>';ct.innerHTML=h}
 
-// ===== PERFORMANCE =====
-let pfCh=null;
-function rPerf(){
-  let cost=0,val=0;
+// ===== PERFORMANCE & CHARTS =====
+let pfIdxCh=null, pfValCh=null;
+let dailyData = [], monthlyData = [];
+
+async function rPerf(){
+  // 1. 상단 요약 카드 (총 평가 손익 / 총 수익률 / 투자 원금)
+  let cost=0, val=0;
   for(const h of D.holdings){const cp=curPrice(h);cost+=toK(h.avgPrice*h.qty,h.currency);val+=toK(cp*h.qty,h.currency)}
-  const pnl=val-cost,pp=cost>0?(pnl/cost)*100:0;
+  const pnl=val-cost, pp=cost>0?(pnl/cost)*100:0;
   $('pfS').innerHTML=`<div class="sc"><div class="sl">총 평가 손익</div><div class="sv ${pnl>=0?'pos':'neg'}">${fK(pnl)}</div></div><div class="sc"><div class="sl">총 수익률</div><div class="sv ${pp>=0?'pos':'neg'}">${fP(pp)}</div></div><div class="sc"><div class="sl">투자 원금</div><div class="sv">${fK(cost)}</div></div>`;
-  const ctx=$('pfC');if(pfCh)pfCh.destroy();
-  const sd=new Date('2026-01-01'),td=new Date(),lb=[],pD=[],spD=[],ksD=[];let days=0;
-  for(let d=new Date(sd);d<=td;d.setDate(d.getDate()+1)){if(days%5===0||d.getTime()>=td.getTime()-7*864e5){lb.push(d.toLocaleDateString('ko-KR',{month:'short',day:'numeric'}));const t=days/365;pD.push((Math.sin(t*4)*3+t*8+Math.random()*2-1).toFixed(2));spD.push((Math.sin(t*3)*2+t*6+Math.random()*1.5-.75).toFixed(2));ksD.push((Math.sin(t*5)*2.5+t*4+Math.random()*1.8-.9).toFixed(2))}days++}
-  pfCh=new Chart(ctx,{type:'line',data:{labels:lb,datasets:[{label:'내 포트폴리오',data:pD,borderColor:'#c4a265',backgroundColor:'rgba(196,162,101,.06)',fill:true,tension:.4,borderWidth:2,pointRadius:0},{label:'S&P 500',data:spD,borderColor:'#60a5fa',fill:false,tension:.4,borderWidth:1.5,pointRadius:0},{label:'KOSPI',data:ksD,borderColor:'#4ade80',fill:false,tension:.4,borderWidth:1.5,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},scales:{x:{ticks:{color:'#656360',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(37,37,51,.4)'}},y:{ticks:{color:'#656360',font:{size:9},callback:v=>v+'%'},grid:{color:'rgba(37,37,51,.4)'}}},plugins:{legend:{labels:{color:'#a09e9a',font:{family:'Libre Franklin',size:10},padding:12}}}}});
+  
+  // 2. 종목별 수익률 테이블
   let th='<div style="overflow-x:auto"><table><thead><tr><th>종목</th><th>매입가</th><th>현재가</th><th>수익률</th><th>수익금</th></tr></thead><tbody>';
   for(const h of D.holdings){const cp=curPrice(h),has=hasCurPrice(h);const ck=toK(h.avgPrice*h.qty,h.currency),vk=toK(cp*h.qty,h.currency),pl=vk-ck,pr=ck>0?((vk-ck)/ck)*100:0;
     th+=`<tr><td>${h.name}${!has?' <span class="price-stale">(매수가 기준)</span>':''}</td><td class="mn">${fN(h.avgPrice,2)} ${h.currency}</td><td class="mn">${fN(cp,2)} ${h.currency}</td><td class="mn ${pr>=0?'pos':'neg'}">${fP(pr)}</td><td class="mn ${pl>=0?'pos':'neg'}">${fK(pl)}</td></tr>`}
   th+='</tbody></table></div>';$('pfT').innerHTML=th;
+
+  // 3. 차트 렌더링을 위한 과거 데이터 페칭
+  await fetchHistoricalData();
+}
+
+async function fetchHistoricalData() {
+  const tickersToFetch = ['^GSPC', '^KS11'];
+  D.holdings.forEach(h => { if(h.ticker) tickersToFetch.push(h.ticker); });
+  
+  const d = await api('/api/history', { method: 'POST', body: JSON.stringify({ tickers: tickersToFetch }) });
+  if (!d || !d.results) return;
+
+  // 지수 차트 (S&P 500, KOSPI)
+  const spData = d.results['^GSPC'], ksData = d.results['^KS11'];
+  if (spData && ksData) {
+    const dates = spData.timestamps.map(t => new Date(t * 1000).toLocaleDateString('ko-KR', {month:'short', day:'numeric'}));
+    const sp0 = spData.closes[0], ks0 = ksData.closes[0];
+    const spPct = spData.closes.map(c => ((c - sp0) / sp0) * 100);
+    const ksPct = ksData.closes.map(c => ((c - ks0) / ks0) * 100);
+    
+    if(pfIdxCh) pfIdxCh.destroy();
+    pfIdxCh = new Chart($('pfIdxC'),{
+      type: 'line',
+      data: { labels: dates, datasets: [
+        { label: 'S&P 500 (YTD)', data: spPct, borderColor: '#60a5fa', fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0 },
+        { label: 'KOSPI (YTD)', data: ksPct, borderColor: '#4ade80', fill: false, tension: 0.1, borderWidth: 2, pointRadius: 0 }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { ticks: { color: '#656360', font:{size:9}, maxTicksLimit: 12 }, grid: { color: 'rgba(37,37,51,.4)' } }, y: { ticks: { color: '#656360', font:{size:9}, callback: v=>v.toFixed(1)+'%' }, grid: { color: 'rgba(37,37,51,.4)' } } }, plugins: { legend: { labels: { color: '#a09e9a', font: { family: 'Libre Franklin', size: 10 } } } } }
+    });
+  }
+
+  // 내 자산 차트 데이터 가공 (현재 보유 수량을 연초부터 유지했다고 가정하여 산출)
+  let dailyTotals = {};
+  for (const h of D.holdings) {
+    if (!h.ticker || !d.results[h.ticker]) continue;
+    const hist = d.results[h.ticker];
+    hist.timestamps.forEach((t, i) => {
+      const dateStr = new Date(t * 1000).toISOString().split('T')[0];
+      const valKRW = toK(hist.closes[i] * h.qty, h.currency);
+      dailyTotals[dateStr] = (dailyTotals[dateStr] || 0) + valKRW;
+    });
+  }
+  
+  let sortedDates = Object.keys(dailyTotals).sort();
+  dailyData = [];
+  monthlyData = [];
+  
+  let lastMonth = '', monthStartVal = 0;
+
+  for (let i = 0; i < sortedDates.length; i++) {
+    const dStr = sortedDates[i];
+    const val = dailyTotals[dStr];
+    const prevVal = i > 0 ? dailyTotals[sortedDates[i-1]] : val;
+    const diff = val - prevVal;
+    
+    dailyData.push({ date: dStr, label: dStr.slice(5), total: val, change: diff });
+    
+    const curMonth = dStr.slice(0, 7);
+    if (curMonth !== lastMonth) {
+      if (lastMonth !== '') {
+        const mDiff = dailyData[i-1].total - monthStartVal;
+        monthlyData.push({ date: lastMonth, label: lastMonth, total: dailyData[i-1].total, change: mDiff });
+      }
+      monthStartVal = prevVal; // 월초 자산 기준점
+      lastMonth = curMonth;
+    }
+  }
+  // 마지막 달 마감
+  if (dailyData.length > 0) {
+    const mDiff = dailyData[dailyData.length-1].total - monthStartVal;
+    monthlyData.push({ date: lastMonth, label: lastMonth, total: dailyData[dailyData.length-1].total, change: mDiff });
+  }
+
+  renderPerfChart('daily', document.querySelector('#pg-perf .tab.on'));
+}
+
+// 이중 축 차트 렌더링 (막대: 평가손익 변동량, 선: 총 평가액)
+function renderPerfChart(type, el) {
+  document.querySelectorAll('#pg-perf .tab').forEach(x => x.classList.remove('on'));
+  if(el) el.classList.add('on');
+  
+  if(pfValCh) pfValCh.destroy();
+  const data = type === 'daily' ? dailyData : monthlyData;
+  if (!data.length) return;
+
+  const labels = data.map(d => d.label);
+  const totals = data.map(d => d.total);
+  const changes = data.map(d => d.change);
+  const barColors = changes.map(v => v >= 0 ? 'rgba(74, 222, 128, 0.6)' : 'rgba(248, 113, 113, 0.6)');
+
+  pfValCh = new Chart($('pfValC'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          type: 'line',
+          label: '총 평가액 누적 (우측축)',
+          data: totals,
+          borderColor: '#c4a265',
+          backgroundColor: 'rgba(196,162,101,.1)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: type === 'monthly' ? 4 : 0,
+          yAxisID: 'y'
+        },
+        {
+          type: 'bar',
+          label: '평가 손익 변동 (좌측축)',
+          data: changes,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { color: '#656360', font:{size:9}, maxTicksLimit: 12 }, grid: { display: false } },
+        y: { 
+          type: 'linear', display: true, position: 'right', 
+          ticks: { color: '#c4a265', font:{size:9}, callback: v => (v/10000).toFixed(0)+'만' },
+          grid: { color: 'rgba(37,37,51,.4)' },
+          title: { display: true, text: '총 자산', color: '#656360', font: {size: 10} }
+        },
+        y1: { 
+          type: 'linear', display: true, position: 'left',
+          ticks: { color: '#a09e9a', font:{size:9}, callback: v => (v/10000).toFixed(0)+'만' },
+          grid: { display: false },
+          title: { display: true, text: '변동액', color: '#656360', font: {size: 10} }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: { label: function(c) { return c.dataset.label + ': ₩' + Math.round(c.raw).toLocaleString('ko-KR'); } }
+        },
+        legend: { labels: { color: '#a09e9a', font: { family: 'Libre Franklin', size: 10 } } }
+      }
+    }
+  });
 }
 
 // ===== SEARCH =====
@@ -430,29 +598,6 @@ async function loadNI(pre,name,type,el){const r=el.nextElementSibling;if(r.class
 
 // ===== REBALANCE =====
 async function getRebal(){const ct=$('rbOut');ct.innerHTML=ld();let s='현재 포트폴리오:\n';for(const h of D.holdings){const cp=curPrice(h);s+=`- ${h.name}: ${h.qty}주, 평단 ${h.avgPrice} ${h.currency}, 평가 ${fK(toK(cp*h.qty,h.currency))}\n`}for(const c of D.cash)s+=`- ${c.type==='cash'?'현금':'적금'}: ${c.amount} ${c.currency} (${c.memo||''})\n`;ct.innerHTML=`<div class="md">${mkd(await aiQ(s,'rebalance'))}</div>`}
-
-// ===== EDIT TICKER (NEW) =====
-async function editTicker(id, oldTicker) {
-  const h = D.holdings.find(x => x.id === id);
-  if (!h) return;
-  const newTicker = prompt(`'${h.name}'의 Yahoo Finance 티커를 입력하세요.\n(예: 한국은 005930.KS, 미국은 AAPL)`, oldTicker || '');
-  if (newTicker === null || newTicker.trim() === '' || newTicker.trim().toUpperCase() === oldTicker) return;
-  
-  h.ticker = newTicker.trim().toUpperCase();
-  await save();
-  rPort(); 
-
-  const d = await api('/api/quotes', { method: 'POST', body: JSON.stringify({ tickers: [{ name: h.name, ticker: h.ticker, market: h.market, currency: h.currency }] }) });
-  if (d && d.results && d.results[0] && d.results[0].price > 0) {
-    const res = d.results[0];
-    D.pc[pk(h)] = { price: res.price, currency: res.currency, ts: Date.now() };
-    await save();
-    rPort();
-    rDash();
-  } else {
-    alert('입력하신 티커로 시세를 가져오지 못했습니다. 티커가 정확한지 다시 확인해주세요.');
-  }
-}
 
 // ===== INIT =====
 async function init(){
