@@ -143,7 +143,6 @@ tr:hover td{background:var(--bg4)}
 <div class="sb-tog" onclick="togSB()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
 
 <div class="mw"><div class="main">
-<!-- DASHBOARD -->
 <div class="pg on" id="pg-dash"><div class="ph"><h2>대시보드</h2><p id="ddate"></p></div>
 <div class="g4" id="dstats"></div>
 <div class="g2" style="margin-top:16px">
@@ -153,42 +152,33 @@ tr:hover td{background:var(--bg4)}
 </div>
 <div class="cd"><div class="ct">오늘의 주요 뉴스</div><div id="briefing"></div></div>
 </div>
-<!-- PORTFOLIO -->
 <div class="pg" id="pg-port"><div class="ph"><h2>포트폴리오</h2><p>보유 자산 전체 현황</p></div><div id="portAll"></div>
 <div style="margin-top:14px;display:flex;gap:8px"><button class="btn" onclick="openM('mH')">종목 추가</button><button class="btn bo" onclick="openM('mC')">현금/적금 추가</button><button class="btn bo" id="rfBtn" onclick="refreshAll()">시세 새로고침</button></div></div>
-<!-- PERFORMANCE -->
 <div class="pg" id="pg-perf"><div class="ph"><h2>수익률</h2><p>포트폴리오 성과 분석</p></div><div class="g3" id="pfS"></div>
 <div class="cd" style="margin-top:16px"><div class="ct">누적 수익률 vs 주요 지수</div><div class="chart-box" style="height:300px"><canvas id="pfC"></canvas></div></div>
 <div class="cd"><div class="ct">종목별 수익률</div><div id="pfT"></div></div></div>
-<!-- TRADE -->
 <div class="pg" id="pg-trade"><div class="ph"><h2>매수 · 매도</h2><p>거래 등록 → 포트폴리오 · 예수금 자동 반영</p></div>
 <div class="cd"><div class="ct">새 거래 등록</div>
 <div class="fr"><div><label>유형</label><select id="tType"><option value="buy">매수</option><option value="sell">매도</option></select></div><div><label>종목명</label><input id="tName" placeholder="예: Apple, 삼성전자"></div><div><label>시장</label><select id="tMkt"><option value="US">미국 (USD)</option><option value="KR">한국 (KRW)</option><option value="JP">일본 (JPY)</option></select></div></div>
 <div class="fr"><div><label>수량</label><input id="tQty" type="number" placeholder="0"></div><div><label>단가</label><input id="tPrc" type="number" placeholder="0"></div><div><label>거래일</label><input id="tDt" type="date"></div></div>
 <button class="btn" onclick="execTrade()">거래 등록</button></div>
 <div class="cd"><div class="ct">거래 내역</div><div id="tH"></div></div></div>
-<!-- CASHFLOW -->
 <div class="pg" id="pg-cash"><div class="ph"><h2>입출금</h2></div>
 <div class="cd"><div class="ct">입출금 등록</div>
 <div class="fr"><div><label>유형</label><select id="cfTp"><option value="deposit">입금</option><option value="withdraw">출금</option></select></div><div><label>금액</label><input id="cfAm" type="number" placeholder="0"></div><div><label>통화</label><select id="cfCr"><option value="KRW">KRW</option><option value="USD">USD</option><option value="JPY">JPY</option></select></div><div><label>날짜</label><input id="cfDt" type="date"></div></div>
 <div class="fr"><div><label>메모</label><input id="cfMe" placeholder="선택사항"></div></div>
 <button class="btn" onclick="addCF()">등록</button></div>
 <div class="cd"><div class="ct">입출금 내역</div><div id="cfH"></div></div></div>
-<!-- SEARCH -->
 <div class="pg" id="pg-srch"><div class="ph"><h2>주식 검색</h2></div>
 <div class="search-bar"><input id="sIn" placeholder="종목명 입력 (예: Apple, 삼성전자)" onkeydown="if(event.key==='Enter')doSrch()"><button class="btn" onclick="doSrch()">검색</button></div>
 <div class="tabs" id="sTabs"><div class="tab on" data-t="info" onclick="sTab('info',this)">기업 정보</div><div class="tab" data-t="technical" onclick="sTab('technical',this)">기술적 분석</div><div class="tab" data-t="stocknews" onclick="sTab('stocknews',this)">뉴스</div><div class="tab" data-t="research" onclick="sTab('research',this)">리서치</div></div>
 <div id="sR"><div class="empty">검색어를 입력하세요</div></div></div>
-<!-- MARKET -->
 <div class="pg" id="pg-mkt"><div class="ph"><h2>시장 동향</h2></div><div class="cd"><div class="ct">오늘의 매크로 브리핑</div><div id="macB"></div></div><div class="cd"><div class="ct">주요 지수 · 원자재</div><div id="mktI"></div></div></div>
-<!-- NEWS -->
 <div class="pg" id="pg-news"><div class="ph"><h2>뉴스 · 리서치</h2><p>종목을 클릭하여 조회</p></div>
 <div class="tabs"><div class="tab on" onclick="nTab('holdings',this)">보유종목 뉴스</div><div class="tab" onclick="nTab('sector',this)">섹터 동향</div><div class="tab" onclick="nTab('research',this)">리서치 자료</div></div><div id="nOut"></div></div>
-<!-- ADVISOR -->
 <div class="pg" id="pg-adv"><div class="ph"><h2>AI 리밸런싱 추천</h2></div><div class="cd"><button class="btn" onclick="getRebal()">리밸런싱 분석 요청</button><div id="rbOut" style="margin-top:16px"></div></div></div>
 </div></div></div>
 
-<!-- MODALS -->
 <div class="modal-bg" id="mH" onclick="if(event.target===this)closeM('mH')"><div class="modal"><h3>보유 종목 추가</h3>
 <div class="fr"><div><label>종목명</label><input id="hN" placeholder="예: Apple, 삼성전자"></div></div>
 <div class="fr"><div><label>시장</label><select id="hMk"><option value="US">미국</option><option value="KR">한국</option><option value="JP">일본</option></select></div><div><label>통화</label><select id="hCr"><option value="USD">USD</option><option value="KRW">KRW</option><option value="JPY">JPY</option></select></div></div>
@@ -234,10 +224,9 @@ function stale(t){return!t||Date.now()-new Date(t).getTime()>3600000}
 async function getFX(){if(!stale(D.fxT)&&D.fx.USDKRW>0)return D.fx;const d=await api('/api/exchange');if(d&&d.USDKRW>0){D.fx=d;D.fxT=new Date().toISOString();await save()}return D.fx}
 async function getIdx(){if(!stale(D.idxT)&&Object.keys(D.idx).length>0)return D.idx;const d=await api('/api/index');if(d&&Object.keys(d).length>0){D.idx=d;D.idxT=new Date().toISOString();await save()}return D.idx}
 
-// BATCH price fetch — uses pre-resolved tickers stored in holdings
+// BATCH price fetch
 async function fetchAllPrices(force=false){
   if(!D.holdings.length)return;
-  // First resolve any holdings without tickers
   for(const h of D.holdings){
     if(!h.ticker){
       const d=await api('/api/resolve',{method:'POST',body:JSON.stringify({name:h.name,market:h.market})});
@@ -245,7 +234,6 @@ async function fetchAllPrices(force=false){
       await save();
     }
   }
-  // Then batch fetch prices for all resolved tickers
   const withTickers=D.holdings.filter(h=>h.ticker);
   if(!withTickers.length)return;
   const allFresh=!force&&withTickers.every(h=>{const c=D.pc[pk(h)];return c&&c.price>0&&Date.now()-c.ts<1800000});
@@ -262,10 +250,8 @@ async function fetchAllPrices(force=false){
 }
 
 function pk(h){return h.name+'_'+h.market}
-// Get current price — returns cached price, or avgPrice as fallback
 function curPrice(h){const c=D.pc[pk(h)];return(c&&c.price>0)?c.price:h.avgPrice}
 function hasCurPrice(h){const c=D.pc[pk(h)];return c&&c.price>0}
-
 async function aiQ(q,type){const d=await api('/api/news',{method:'POST',body:JSON.stringify({query:q,type})});return d?d.text:'데이터를 불러올 수 없습니다.'}
 
 // UTIL
@@ -336,7 +322,11 @@ function rPort(){
       const val=toK(cp*h.qty,h.currency),cost=toK(h.avgPrice*h.qty,h.currency);
       const pnl=val-cost,pp=cost>0?(pnl/cost)*100:0;
       const priceLabel=has?`${fN(cp,h.currency==='JPY'?0:2)} ${h.currency}`:`<span class="price-stale">${fN(h.avgPrice,h.currency==='JPY'?0:2)} ${h.currency} (매수가)</span>`;
-      const tickerInfo=h.ticker?`<span style="color:var(--t3);font-size:10px"> ${h.ticker}</span>`:'<span style="color:var(--red);font-size:10px"> 티커 미확인</span>';
+      
+      const tickerInfo = h.ticker 
+        ? `<span style="color:var(--t3);font-size:10px;cursor:pointer;border-bottom:1px dashed var(--t3);margin-left:4px" onclick="editTicker('${h.id}', '${h.ticker}')" title="클릭하여 티커 수정"> ${h.ticker} ✏️</span>` 
+        : `<span style="color:var(--red);font-size:10px;cursor:pointer;border-bottom:1px dashed var(--red);margin-left:4px" onclick="editTicker('${h.id}', '')" title="클릭하여 티커 수정"> 티커 미확인 ✏️</span>`;
+
       html+=`<tr><td>${h.name}${tickerInfo}</td><td>${h.market}</td><td class="mn">${h.qty}</td><td class="mn">${fN(h.avgPrice,h.currency==='JPY'?0:2)} ${h.currency}</td><td class="mn">${priceLabel}</td><td class="mn">${fK(val)}</td><td class="mn ${pnl>=0?'pos':'neg'}">${fK(pnl)}</td><td class="mn ${pp>=0?'pos':'neg'}">${fP(pp)}</td><td><button class="btn bs br" onclick="delH('${h.id}')">삭제</button></td></tr>`;
     }
     html+='</tbody></table></div></div>';
@@ -359,7 +349,6 @@ async function addHold(){
   const h={id:gid(),name,market,currency,qty,avgPrice:avg,ticker:null};
   D.holdings.push(h);
   await save();closeM('mH');rPort();['hN','hQ','hA'].forEach(id=>$(id).value='');
-  // Resolve ticker in background
   const d=await api('/api/resolve',{method:'POST',body:JSON.stringify({name,market})});
   if(d&&d.ticker){h.ticker=d.ticker;if(d.price>0){D.pc[pk(h)]={price:d.price,currency:d.currency||currency,ts:Date.now()}}}
   await save();rPort();rDash();
@@ -442,17 +431,36 @@ async function loadNI(pre,name,type,el){const r=el.nextElementSibling;if(r.class
 // ===== REBALANCE =====
 async function getRebal(){const ct=$('rbOut');ct.innerHTML=ld();let s='현재 포트폴리오:\n';for(const h of D.holdings){const cp=curPrice(h);s+=`- ${h.name}: ${h.qty}주, 평단 ${h.avgPrice} ${h.currency}, 평가 ${fK(toK(cp*h.qty,h.currency))}\n`}for(const c of D.cash)s+=`- ${c.type==='cash'?'현금':'적금'}: ${c.amount} ${c.currency} (${c.memo||''})\n`;ct.innerHTML=`<div class="md">${mkd(await aiQ(s,'rebalance'))}</div>`}
 
+// ===== EDIT TICKER (NEW) =====
+async function editTicker(id, oldTicker) {
+  const h = D.holdings.find(x => x.id === id);
+  if (!h) return;
+  const newTicker = prompt(`'${h.name}'의 Yahoo Finance 티커를 입력하세요.\n(예: 한국은 005930.KS, 미국은 AAPL)`, oldTicker || '');
+  if (newTicker === null || newTicker.trim() === '' || newTicker.trim().toUpperCase() === oldTicker) return;
+  
+  h.ticker = newTicker.trim().toUpperCase();
+  await save();
+  rPort(); 
+
+  const d = await api('/api/quotes', { method: 'POST', body: JSON.stringify({ tickers: [{ name: h.name, ticker: h.ticker, market: h.market, currency: h.currency }] }) });
+  if (d && d.results && d.results[0] && d.results[0].price > 0) {
+    const res = d.results[0];
+    D.pc[pk(h)] = { price: res.price, currency: res.currency, ts: Date.now() };
+    await save();
+    rPort();
+    rDash();
+  } else {
+    alert('입력하신 티커로 시세를 가져오지 못했습니다. 티커가 정확한지 다시 확인해주세요.');
+  }
+}
+
 // ===== INIT =====
 async function init(){
   const td=new Date().toISOString().split('T')[0];
   if($('tDt'))$('tDt').value=td;if($('cfDt'))$('cfDt').value=td;
-  // Fetch FX + indexes first
   await Promise.all([getFX(),getIdx()]);
-  // Render dashboard immediately with avgPrice fallback
   rDash();
-  // Then batch fetch all stock prices
   await fetchAllPrices();
-  // Re-render with real prices
   rDash();
 }
 </script>
