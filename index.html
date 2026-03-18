@@ -234,18 +234,28 @@ function stale(t){return!t||Date.now()-new Date(t).getTime()>3600000}
 async function getFX(){if(!stale(D.fxT)&&D.fx.USDKRW>0)return D.fx;const d=await api('/api/exchange');if(d&&d.USDKRW>0){D.fx=d;D.fxT=new Date().toISOString();await save()}return D.fx}
 async function getIdx(){if(!stale(D.idxT)&&Object.keys(D.idx).length>0)return D.idx;const d=await api('/api/index');if(d&&Object.keys(d).length>0){D.idx=d;D.idxT=new Date().toISOString();await save()}return D.idx}
 
-// BATCH price fetch — single API call for all holdings
+// BATCH price fetch — uses pre-resolved tickers stored in holdings
 async function fetchAllPrices(force=false){
   if(!D.holdings.length)return;
-  // Check if cache is fresh enough
-  const allFresh=!force&&D.holdings.every(h=>{const c=D.pc[pk(h)];return c&&c.price>0&&Date.now()-c.ts<1800000});
+  // First resolve any holdings without tickers
+  for(const h of D.holdings){
+    if(!h.ticker){
+      const d=await api('/api/resolve',{method:'POST',body:JSON.stringify({name:h.name,market:h.market})});
+      if(d&&d.ticker){h.ticker=d.ticker;if(d.price>0){D.pc[pk(h)]={price:d.price,currency:d.currency||h.currency,ts:Date.now()}}}
+      await save();
+    }
+  }
+  // Then batch fetch prices for all resolved tickers
+  const withTickers=D.holdings.filter(h=>h.ticker);
+  if(!withTickers.length)return;
+  const allFresh=!force&&withTickers.every(h=>{const c=D.pc[pk(h)];return c&&c.price>0&&Date.now()-c.ts<1800000});
   if(allFresh)return;
-  const stocks=D.holdings.map(h=>({name:h.name,market:h.market}));
-  const d=await api('/api/quotes',{method:'POST',body:JSON.stringify({stocks})});
+  const tickers=withTickers.map(h=>({name:h.name,ticker:h.ticker,market:h.market,currency:h.currency}));
+  const d=await api('/api/quotes',{method:'POST',body:JSON.stringify({tickers})});
   if(d&&d.results){
-    for(let i=0;i<d.results.length;i++){
-      const r=d.results[i];
-      if(r.price>0){D.pc[pk(D.holdings[i])]={price:r.price,currency:r.currency,ts:Date.now()}}
+    for(const r of d.results){
+      const h=D.holdings.find(x=>x.name===r.name);
+      if(h&&r.price>0){D.pc[pk(h)]={price:r.price,currency:r.currency,ts:Date.now()}}
     }
     await save();
   }
@@ -326,7 +336,8 @@ function rPort(){
       const val=toK(cp*h.qty,h.currency),cost=toK(h.avgPrice*h.qty,h.currency);
       const pnl=val-cost,pp=cost>0?(pnl/cost)*100:0;
       const priceLabel=has?`${fN(cp,h.currency==='JPY'?0:2)} ${h.currency}`:`<span class="price-stale">${fN(h.avgPrice,h.currency==='JPY'?0:2)} ${h.currency} (매수가)</span>`;
-      html+=`<tr><td>${h.name}</td><td>${h.market}</td><td class="mn">${h.qty}</td><td class="mn">${fN(h.avgPrice,h.currency==='JPY'?0:2)} ${h.currency}</td><td class="mn">${priceLabel}</td><td class="mn">${fK(val)}</td><td class="mn ${pnl>=0?'pos':'neg'}">${fK(pnl)}</td><td class="mn ${pp>=0?'pos':'neg'}">${fP(pp)}</td><td><button class="btn bs br" onclick="delH('${h.id}')">삭제</button></td></tr>`;
+      const tickerInfo=h.ticker?`<span style="color:var(--t3);font-size:10px"> ${h.ticker}</span>`:'<span style="color:var(--red);font-size:10px"> 티커 미확인</span>';
+      html+=`<tr><td>${h.name}${tickerInfo}</td><td>${h.market}</td><td class="mn">${h.qty}</td><td class="mn">${fN(h.avgPrice,h.currency==='JPY'?0:2)} ${h.currency}</td><td class="mn">${priceLabel}</td><td class="mn">${fK(val)}</td><td class="mn ${pnl>=0?'pos':'neg'}">${fK(pnl)}</td><td class="mn ${pp>=0?'pos':'neg'}">${fP(pp)}</td><td><button class="btn bs br" onclick="delH('${h.id}')">삭제</button></td></tr>`;
     }
     html+='</tbody></table></div></div>';
   }
@@ -345,9 +356,13 @@ async function addHold(){
   const name=$('hN').value.trim(),market=$('hMk').value,currency=$('hCr').value;
   const qty=parseFloat($('hQ').value),avg=parseFloat($('hA').value);
   if(!name||!qty||!avg)return alert('모든 필드를 입력해주세요.');
-  D.holdings.push({id:gid(),name,market,currency,qty,avgPrice:avg});
+  const h={id:gid(),name,market,currency,qty,avgPrice:avg,ticker:null};
+  D.holdings.push(h);
   await save();closeM('mH');rPort();['hN','hQ','hA'].forEach(id=>$(id).value='');
-  fetchAllPrices(true).then(()=>{rPort();rDash()});
+  // Resolve ticker in background
+  const d=await api('/api/resolve',{method:'POST',body:JSON.stringify({name,market})});
+  if(d&&d.ticker){h.ticker=d.ticker;if(d.price>0){D.pc[pk(h)]={price:d.price,currency:d.currency||currency,ts:Date.now()}}}
+  await save();rPort();rDash();
 }
 async function addCash(){const type=$('cTp').value,currency=$('cCr').value,amount=parseFloat($('cAm').value),memo=$('cMe').value.trim();if(!amount)return alert('금액을 입력해주세요.');D.cash.push({id:gid(),type,currency,amount,memo});await save();closeM('mC');rPort();rDash();['cAm','cMe'].forEach(id=>$(id).value='')}
 async function delH(id){if(!confirm('삭제?'))return;D.holdings=D.holdings.filter(h=>h.id!==id);await save();rPort();rDash()}
