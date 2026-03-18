@@ -344,7 +344,7 @@ let EK='';
 async function dk(pw){const e=new TextEncoder;const km=await crypto.subtle.importKey('raw',e.encode(pw),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:e.encode('pb-salt-v2-2026'),iterations:100000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function enc(d){const k=await dk(EK);const iv=crypto.getRandomValues(new Uint8Array(12));const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,new TextEncoder().encode(JSON.stringify(d)));const b=new Uint8Array(iv.length+ct.byteLength);b.set(iv);b.set(new Uint8Array(ct),iv.length);return btoa(String.fromCharCode(...b))}
 async function dec(b64){const k=await dk(EK);const r=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));const d=await crypto.subtle.decrypt({name:'AES-GCM',iv:r.slice(0,12)},k,r.slice(12));return JSON.parse(new TextDecoder().decode(d))}
-async function hashPw(pw){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('pb-pw-'+pw));return btoa(String.fromCharCode(...new Uint8Array(b)))}
+async function hashPw(pw){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('pb-pw-check-'+pw));return btoa(String.fromCharCode(...new Uint8Array(b)))}
 
 // ===== LOGIN =====
 async function doLogin(){
