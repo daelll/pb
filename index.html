@@ -786,7 +786,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('on'); }
 async function renderDash() {
   document.getElementById('dashDate').textContent = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
 
-  let stockVal=0, cashVal=0, savVal=0;
+  let stockVal=0, stockCost=0, cashVal=0, savVal=0;
   // 파이 차트용 상세 데이터
   const pieItems = [];
 
