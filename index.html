@@ -176,9 +176,133 @@ tr:hover td{background:var(--bg4)}
 .fresh{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--t3);letter-spacing:.5px}
 .fresh-dot{width:5px;height:5px;border-radius:50%}
 .fresh-dot.live{background:var(--green)}.fresh-dot.stale{background:var(--red)}
+
+/* ===== MOBILE HEADER ===== */
+.mob-header{display:none}
+
+/* ===== SIDEBAR BACKDROP ===== */
+.sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:19;backdrop-filter:blur(2px)}
+.sb-backdrop.on{display:block}
+
+/* ===== MOBILE ===== */
+@media(max-width:768px){
+  html,body{overflow:hidden auto}
+
+  /* Mobile header */
+  .mob-header{
+    display:flex;align-items:center;gap:12px;
+    position:fixed;top:0;left:0;right:0;height:50px;z-index:18;
+    background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;
+  }
+  .mob-ham{
+    background:none;border:none;cursor:pointer;padding:6px;color:var(--t2);
+    display:flex;align-items:center;justify-content:center;border-radius:6px;
+    transition:background .15s;
+  }
+  .mob-ham:hover{background:var(--bg3)}
+  .mob-ham svg{width:20px;height:20px}
+  .mob-title{font:300 16px var(--fd);color:var(--gold);letter-spacing:2px;text-transform:uppercase}
+
+  /* Sidebar — fixed overlay on mobile */
+  .sidebar{
+    position:fixed;top:0;left:0;height:100vh;z-index:20;
+    transform:translateX(0);margin-left:0;opacity:1;
+    transition:transform .3s cubic-bezier(.4,0,.2,1);
+  }
+  .sidebar.collapsed{
+    transform:translateX(-260px);margin-left:0;opacity:1;pointer-events:none;
+  }
+  .sidebar.collapsed ~ .main-wrap{margin-left:0}
+  .sidebar-toggle{display:none}
+
+  /* Main — push down for header */
+  .main-wrap{margin-left:0 !important;padding-top:50px}
+  .main{padding:14px 12px 40px}
+
+  /* Grids */
+  .g2{grid-template-columns:1fr !important;gap:12px}
+  .g3{grid-template-columns:1fr 1fr !important;gap:10px}
+  .g4{grid-template-columns:1fr 1fr !important;gap:10px}
+
+  /* Dashboard stats: 2x2 */
+  #dashStats{grid-template-columns:1fr 1fr !important}
+
+  /* FX: keep 3 cols (short numbers) */
+  #fxDisp{grid-template-columns:1fr 1fr 1fr !important;gap:8px}
+  #fxDisp .sc{padding:12px}
+  #fxDisp .sc-v{font-size:15px!important}
+
+  /* Perf stats: 3 cols compact */
+  #perfStats{grid-template-columns:1fr 1fr 1fr !important;gap:8px}
+
+  /* Cards */
+  .card{padding:14px;margin-bottom:12px}
+  .card-t{font-size:15px;margin-bottom:10px}
+
+  /* Stat cards */
+  .sc{padding:12px}
+  .sc-l{font-size:9px}
+  .sc-v{font-size:17px}
+
+  /* Page header */
+  .pg-h{margin-bottom:14px}
+  .pg-h h2{font-size:20px}
+  .pg-h p{font-size:12px}
+
+  /* Forms — stack vertically */
+  .fr{flex-direction:column;gap:8px;margin-bottom:10px}
+  .fr > div{flex:unset}
+  input,select,textarea{font-size:16px!important} /* prevents iOS zoom */
+
+  /* Tables — compact & scrollable */
+  .card > div[style*="overflow-x"],table{font-size:11px}
+  td,th{padding:7px 5px}
+  th{font-size:8px}
+
+  /* Tabs */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .tab{padding:9px 14px;font-size:10px;white-space:nowrap;flex-shrink:0}
+
+  /* Charts */
+  .chart-box{height:200px;margin-top:8px}
+  #pg-performance .chart-box{height:220px}
+
+  /* Modal */
+  .modal{padding:20px;width:95%;max-width:none}
+
+  /* Buttons */
+  .btn{padding:11px 18px}
+
+  /* Search bar */
+  .search-bar{gap:8px}
+
+  /* Loading */
+  .ld{padding:14px 0}
+
+  /* Login */
+  .login-box{padding:0 4px}
+  .login-box h1{font-size:26px}
+
+  /* Markdown content */
+  .md{font-size:13px}
+  .md h1{font-size:17px}.md h2{font-size:15px}.md h3{font-size:14px}
+}
 </style>
 </head>
 <body>
+
+<!-- ===== MOBILE HEADER ===== -->
+<div class="mob-header" id="mobHeader">
+  <button class="mob-ham" onclick="toggleSidebar()" aria-label="메뉴">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <span class="mob-title">Private Banker</span>
+</div>
+
+<!-- ===== SIDEBAR BACKDROP ===== -->
+<div class="sb-backdrop" id="sbBackdrop" onclick="closeSidebar()"></div>
 
 <!-- ===== LOGIN GATE ===== -->
 <div id="loginGate">
@@ -472,6 +596,10 @@ async function attemptLogin() {
 function enterApp() {
   document.getElementById('loginGate').classList.add('hidden');
   document.getElementById('appRoot').style.display = 'flex';
+  // 모바일에서는 사이드바 기본 숨김
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.add('collapsed');
+  }
   init();
 }
 
@@ -597,13 +725,24 @@ function nav(pg) {
   document.querySelectorAll('.sb-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`pg-${pg}`).classList.add('active');
   document.querySelector(`.sb-item[data-pg="${pg}"]`)?.classList.add('active');
-  // Auto-collapse sidebar
+  // Auto-collapse sidebar (+ close mobile backdrop)
   document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('sbBackdrop').classList.remove('on');
   onPage(pg);
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sbBackdrop');
+  sb.classList.toggle('collapsed');
+  if (window.innerWidth <= 768) {
+    bd.classList.toggle('on', !sb.classList.contains('collapsed'));
+  }
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('sbBackdrop').classList.remove('on');
 }
 
 function onPage(pg) {
