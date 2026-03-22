@@ -385,9 +385,12 @@ tr:hover td{background:var(--bg4)}
       <!-- PORTFOLIO -->
       <div class="page" id="pg-portfolio">
         <div class="pg-h"><h2>포트폴리오</h2><p>보유 자산 현황</p></div>
-        <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
-          <button class="btn" onclick="openModal('mHold')">+ 종목 추가</button>
-          <button class="btn btn-o" onclick="openModal('mCash')">+ 현금/적금</button>
+        <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;justify-content:space-between;align-items:center">
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="openModal('mHold')">+ 종목 추가</button>
+            <button class="btn btn-o" onclick="openModal('mCash')">+ 현금/적금</button>
+          </div>
+          <button class="btn btn-sm btn-o" style="font-size:12px" onclick="refreshPricesBtn(this)">시세 갱신</button>
         </div>
         <!-- 주식 -->
         <div class="card">
@@ -657,9 +660,9 @@ function shouldRefresh(lastUpdate) {
   if (!lastUpdate) return true;
   const last = new Date(lastUpdate);
   const now = new Date();
-  // Refresh if last update was more than 1 hour ago, or if it's past 10 AM KST and last was before 10 AM KST today
   const diffMs = now - last;
-  if (diffMs > 3600000) return true; // More than 1 hour
+  // 4시간(14,400,000 밀리초)마다 자동 갱신
+  if (diffMs > 14400000) return true;
   return false;
 }
 
@@ -783,17 +786,37 @@ function closeModal(id) { document.getElementById(id).classList.remove('on'); }
 async function renderDash() {
   document.getElementById('dashDate').textContent = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
 
-  let stockVal=0, stockCost=0, cashVal=0, savVal=0;
+  let stockVal=0, cashVal=0, savVal=0;
+  // 파이 차트용 상세 데이터
+  const pieItems = [];
+
   for (const h of appData.holdings) {
     const c = appData.priceCache[h.ticker];
     const cp = c ? c.price : h.avgPrice;
-    stockVal += toKRW(cp * h.qty, h.currency);
+    const v = toKRW(cp * h.qty, h.currency);
+    stockVal += v;
     stockCost += toKRW(h.avgPrice * h.qty, h.currency);
+    if(v > 0) pieItems.push({ label: h.name || h.ticker, value: v });
   }
+
+  // 현금/적금을 통화별로 집계
+  const cashMap = {};
   for (const c of appData.cash) {
-    if (c.type==='cash') cashVal += toKRW(c.amount, c.currency);
-    else savVal += toKRW(c.amount, c.currency);
+    const v = toKRW(c.amount, c.currency);
+    if (c.type==='cash') cashVal += v;
+    else savVal += v;
+    
+    if(v > 0) {
+      const typeStr = c.type==='cash' ? '현금' : '적금';
+      const key = `${typeStr} (${c.currency})`;
+      cashMap[key] = (cashMap[key] || 0) + v;
+    }
   }
+  for (const [k, v] of Object.entries(cashMap)) pieItems.push({ label: k, value: v });
+
+  // 비중 순으로 정렬
+  pieItems.sort((a,b) => b.value - a.value);
+
   const total = stockVal + cashVal + savVal;
   const pnl = stockVal - stockCost;
   const pnlP = stockCost > 0 ? (pnl/stockCost)*100 : 0;
@@ -806,7 +829,7 @@ async function renderDash() {
   `;
 
   // Pie
-  renderPie(stockVal, cashVal, savVal);
+  renderPie(pieItems);
 
   // FX
   const fx = appData.exchangeRates;
@@ -840,17 +863,65 @@ async function renderDash() {
 }
 
 let pie = null;
-function renderPie(s,c,sv) {
+function renderPie(items) {
   const ctx = document.getElementById('pieChart');
   if(pie) pie.destroy();
+  
+  const labels = items.map(i => i.label);
+  const data = items.map(i => i.value);
+  
+  // 고급스러운 동적 색상 팔레트 생성
+  const baseColors = ['#c9a96e','#60a5fa','#4ade80','#fb923c','#a78bfa','#f472b6','#2dd4bf','#facc15','#94a3b8','#38bdf8'];
+  const colors = data.map((_, i) => baseColors[i % baseColors.length]);
+
   pie = new Chart(ctx, {
     type:'doughnut',
-    data:{
-      labels:['주식','현금','적금'],
-      datasets:[{data:[s,c,sv],backgroundColor:['#c9a96e','#60a5fa','#4ade80'],borderColor:'#18181c',borderWidth:3}]
+    data: {
+      labels: labels,
+      datasets:[{
+        data: data,
+        backgroundColor: colors,
+        borderColor: '#18181c',
+        borderWidth: 2
+      }]
     },
-    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{color:'#a09f9c',font:{family:'DM Sans',size:11},padding:14}}}}
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: {
+          display: false, // 항목이 많아지면 범례가 차트를 가리므로 숨김
+        },
+        tooltip: {
+          backgroundColor: '#1e1e24',
+          borderColor: '#2a2a35',
+          borderWidth: 1,
+          callbacks: {
+            label: (c) => ` ${c.label}: ₩${Math.round(c.raw).toLocaleString('ko-KR')}`
+          }
+        }
+      }
+    }
   });
+
+  // 커스텀 범례 만들기
+  let lg = document.getElementById('pieLegend');
+  if (!lg) {
+    lg = document.createElement('div');
+    lg.id = 'pieLegend';
+    lg.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:16px;justify-content:center';
+    ctx.parentNode.parentNode.appendChild(lg);
+  }
+  
+  let total = data.reduce((a,b)=>a+b, 0);
+  lg.innerHTML = items.map((item, i) => {
+    const pct = total > 0 ? ((item.value/total)*100).toFixed(1) : 0;
+    return `<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3)">
+      <div style="width:8px;height:8px;border-radius:50%;background:${colors[i]}"></div>
+      ${item.label} <span style="font-weight:600;color:var(--t1)">${pct}%</span>
+    </div>`;
+  }).join('');
 }
 
 // ============================================
@@ -1199,6 +1270,23 @@ async function refreshPrices() {
       }
     }
     if(changed)await saveData();
+  }
+}
+async function refreshPricesBtn(btn) {
+  const orig=btn.innerHTML;
+  btn.innerHTML='갱신 중...';
+  btn.disabled=true;
+  try {
+    await refreshPrices();
+    await fetchFX();
+    renderPT();
+    btn.innerHTML='갱신 완료!';
+    setTimeout(()=>btn.innerHTML=orig,2000);
+  } catch(e) {
+    btn.innerHTML='오류 발생';
+    setTimeout(()=>btn.innerHTML=orig,2000);
+  } finally {
+    btn.disabled=false;
   }
 }
 
